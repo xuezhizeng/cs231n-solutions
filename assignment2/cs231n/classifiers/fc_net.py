@@ -205,21 +205,26 @@ class FullyConnectedNet(object):
         size=(input_dim, hidden_dims[0])
     ).reshape(input_dim, hidden_dims[0])
     self.params['b1'] = np.zeros(hidden_dims[0])
+    if self.use_batchnorm:
+        self.params['gamma1'] = np.ones(hidden_dims[0])
+        self.params['beta1'] = np.zeros(hidden_dims[0])
     
     # hidden layers
     for i in range(1, len(hidden_dims)):
         in_dim = hidden_dims[i-1]
         out_dim = hidden_dims[i]
         # initialize Wi
-        Wi = 'W'+str(i+1)
-        self.params[Wi] = np.random.normal(
+        self.params['W'+str(i+1)] = np.random.normal(
             loc=0,
             scale=weight_scale,
             size=(in_dim, out_dim)
         ).reshape(in_dim, out_dim)
         # initialize bi
-        bi = 'b'+str(i+1)
-        self.params[bi] = np.zeros(out_dim)
+        self.params['b'+str(i+1)] = np.zeros(out_dim)
+        
+        if self.use_batchnorm:
+            self.params['gamma'+str(i+1)] = np.ones(out_dim)
+            self.params['beta'+str(i+1)] = np.zeros(out_dim)
         
     # output layer    
     self.params['W' + str(self.num_layers)] = np.random.normal(
@@ -288,30 +293,40 @@ class FullyConnectedNet(object):
     cache = {}
     in_x = None
     
-    # first layer
+    # first hidden layer
     W1 = self.params['W1']
     b1 = self.params['b1']
-    a1, l1_cache = affine_forward(X, W1, b1)
-    r1, r1_cache = relu_forward(a1)
-    cache['l1'] = l1_cache
+    l1, a1_cache = affine_forward(X, W1, b1)
+    cache['a1'] = a1_cache
+    if self.use_batchnorm:
+        l1, bn1_cache = batchnorm_forward(l1, self.params['gamma1'], self.params['beta1'], self.bn_params[0])
+        cache['bn1'] = bn1_cache
+    l1, r1_cache = relu_forward(l1)
     cache['r1'] = r1_cache
-    in_x = r1
+    in_x = l1
     # other hidden layers
     for i in range(2, self.num_layers):
         Wi = self.params['W'+str(i)]
         bi = self.params['b'+str(i)]
-        ai, li_cache = affine_forward(in_x, Wi, bi)
-        
-        ri, ri_cache = relu_forward(ai)
-        
-        cache['l'+str(i)] = li_cache
+        li, ai_cache = affine_forward(in_x, Wi, bi)
+        cache['a'+str(i)] = ai_cache
+        if self.use_batchnorm:
+            li, bni_cache = batchnorm_forward(
+                li,
+                self.params['gamma'+str(i)],
+                self.params['beta'+str(i)],
+                self.bn_params[i-1]
+            )
+            cache['bn'+str(i)] = bni_cache
+        li, ri_cache = relu_forward(li)
         cache['r'+str(i)] = ri_cache
-        in_x = ri
+        in_x = li
+    
     # output layer
     Wl = self.params['W'+str(self.num_layers)]
     bl = self.params['b'+str(self.num_layers)]
     scores, ll_cache = affine_forward(in_x, Wl, bl)
-    cache['l'+str(self.num_layers)] = ll_cache
+    cache['a'+str(self.num_layers)] = ll_cache
         
     ############################################################################
     #                             END OF YOUR CODE                             #
@@ -344,18 +359,24 @@ class FullyConnectedNet(object):
     
     out = None
     # output layer
-    d_out, d_Wl, d_bl = affine_backward(d_scores, cache['l'+str(self.num_layers)])
+    d_out, d_Wl, d_bl = affine_backward(d_scores, cache['a'+str(self.num_layers)])
     grads['W'+str(self.num_layers)] = d_Wl
     grads['b'+str(self.num_layers)] = d_bl
     
     # hidden layers
     for i in reversed(range(1, self.num_layers)):
-        d_ai = relu_backward(d_out, cache['r'+str(i)])
-        d_out, d_Wi, d_bi = affine_backward(d_ai, cache['l'+str(i)])
+        d_li = relu_backward(d_out, cache['r'+str(i)])
+        if self.use_batchnorm:
+            d_li, dgamma_i, dbeta_i = batchnorm_backward_alt(d_li, cache['bn'+str(i)])
+            grads['gamma'+str(i)] = dgamma_i
+            grads['beta'+str(i)] = dbeta_i
+        
+        d_out, d_Wi, d_bi = affine_backward(d_li, cache['a'+str(i)])
         d_Wi += self.reg * self.params['W'+str(i)]
         
         grads['W'+str(i)] = d_Wi
         grads['b'+str(i)] = d_bi
+        
     
     ############################################################################
     #                             END OF YOUR CODE                             #
