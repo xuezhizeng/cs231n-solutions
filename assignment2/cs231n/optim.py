@@ -149,24 +149,19 @@ def adam(x, dx, config=None):
   config['t'] += 1
   
   # m = beta1*m + (1-beta1)*dx
-  config['m'] = config['beta1'] * config['m'] + (1-config['beta1']) * dx
+  config['m'] = config['beta1'] * config['m'] + (1 - config['beta1']) * dx
   # v = beta2*v + (1-beta2)*(dx**2)
-  config['v'] = config['beta2'] * config['v'] + (1-config['beta2']) * (dx*dx)
+  config['v'] = config['beta2'] * config['v'] + (1 - config['beta2']) * (dx ** 2)
   
   # how to get beta1(t+1) and beta2(t+1)
-  m = config['m'] / (1-config['beta1'])
-  v = config['v'] / (1-config['beta2'])
+  m = config['m'] / (1-config['beta1'] ** config['t'])
+  v = config['v'] / (1-config['beta2'] ** config['t'])
 
   # x += - learning_rate * m / (np.sqrt(v) + eps)
-  next_x = x - ( config['learning_rate']*m / (np.sqrt(v) + config['epsilon']) )
+  next_x = x - ( config['learning_rate'] * m / (np.sqrt(v) + config['epsilon']) )
 
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
   
   return next_x, config
-
-  
-  
-  
-

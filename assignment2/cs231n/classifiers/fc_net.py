@@ -221,7 +221,7 @@ class FullyConnectedNet(object):
         ).reshape(in_dim, out_dim)
         # initialize bi
         self.params['b'+str(i+1)] = np.zeros(out_dim)
-        
+        # batch norm
         if self.use_batchnorm:
             self.params['gamma'+str(i+1)] = np.ones(out_dim)
             self.params['beta'+str(i+1)] = np.zeros(out_dim)
@@ -298,18 +298,26 @@ class FullyConnectedNet(object):
     b1 = self.params['b1']
     l1, a1_cache = affine_forward(X, W1, b1)
     cache['a1'] = a1_cache
+    # batchnorm
     if self.use_batchnorm:
         l1, bn1_cache = batchnorm_forward(l1, self.params['gamma1'], self.params['beta1'], self.bn_params[0])
         cache['bn1'] = bn1_cache
+    # relu
     l1, r1_cache = relu_forward(l1)
     cache['r1'] = r1_cache
+    # dropout
+    if self.use_dropout:
+        l1, do1_cache = dropout_forward(l1, self.dropout_param)
+        cache['do1'] = do1_cache
     in_x = l1
+    
     # other hidden layers
     for i in range(2, self.num_layers):
         Wi = self.params['W'+str(i)]
         bi = self.params['b'+str(i)]
         li, ai_cache = affine_forward(in_x, Wi, bi)
         cache['a'+str(i)] = ai_cache
+        # batchnorm
         if self.use_batchnorm:
             li, bni_cache = batchnorm_forward(
                 li,
@@ -318,8 +326,13 @@ class FullyConnectedNet(object):
                 self.bn_params[i-1]
             )
             cache['bn'+str(i)] = bni_cache
+        # relu
         li, ri_cache = relu_forward(li)
         cache['r'+str(i)] = ri_cache
+        # dropout
+        if self.use_dropout:
+            li, doi_cache = dropout_forward(li, self.dropout_param)
+            cache['do'+str(i)] = doi_cache
         in_x = li
     
     # output layer
@@ -365,7 +378,12 @@ class FullyConnectedNet(object):
     
     # hidden layers
     for i in reversed(range(1, self.num_layers)):
+        # dropout
+        if self.use_dropout:
+            d_out = dropout_backward(d_out, cache['do'+str(i)])
+        # relu
         d_li = relu_backward(d_out, cache['r'+str(i)])
+        # batchnorm
         if self.use_batchnorm:
             d_li, dgamma_i, dbeta_i = batchnorm_backward_alt(d_li, cache['bn'+str(i)])
             grads['gamma'+str(i)] = dgamma_i
